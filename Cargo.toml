@@ -1,0 +1,9 @@
+[package]
+name = "keyprod"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+libc = "0.2.174"
+libudev = "0.3.0"
+nix = { version = "0.30.1", features = ["event"] }
