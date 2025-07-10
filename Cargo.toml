@@ -7,3 +7,6 @@ edition = "2024"
 libc = "0.2.174"
 libudev = "0.3.0"
 nix = { version = "0.30.1", features = ["event"] }
+
+[build-dependencies]
+bindgen = "0.72.0"

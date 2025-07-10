@@ -6,9 +6,7 @@ use std::{
 
 use nix::poll::{PollFd, PollFlags, PollTimeout};
 
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct KbdEvent(libc::input_event);
+use crate::kbd_event::{InputEvent, KbdEvent};
 
 #[derive(Debug)]
 pub struct DeviceFile {
@@ -41,17 +39,24 @@ impl LinuxKeyboardEventListener {
         self.devices
             .iter()
             .filter_map(|dev| {
-                File::options()
+                let opened_file = File::options()
                     .read(true)
                     .custom_flags(libc::O_NONBLOCK)
-                    .open(&dev.path)
-                    .map_err(|dev_err| {
+                    .open(&dev.path);
+
+                match opened_file {
+                    Ok(file) => {
+                        println!("Successfully opened {:?} for reading events.", dev.path);
+                        Some(file)
+                    }
+                    Err(dev_err) => {
                         eprintln!(
-                            "Failed to open device file {:?} to read: {}",
+                            "Failed to open device file {:?} to read: {}.",
                             dev.path, dev_err
-                        )
-                    })
-                    .ok()
+                        );
+                        None
+                    }
+                }
             })
             .collect()
     }
@@ -64,32 +69,32 @@ impl LinuxKeyboardEventListener {
     }
 
     fn read_events_from_dev(&mut self, file: &mut File) -> Vec<KbdEvent> {
-        let mut buf = [0; Self::MAX_EVENTS_PER_READ * size_of::<KbdEvent>()];
+        let mut buf = [0; Self::MAX_EVENTS_PER_READ * size_of::<InputEvent>()];
 
         match file.read(&mut buf) {
             Ok(bytes_read) => {
-                assert_eq!(bytes_read % size_of::<KbdEvent>(), 0);
-                let events_cnt = bytes_read / size_of::<KbdEvent>();
-
-                let mut events = Vec::with_capacity(events_cnt);
-                unsafe {
-                    let ptr = buf.as_ptr() as *const KbdEvent;
-                    let slice = std::slice::from_raw_parts(ptr, events_cnt);
-                    events.extend_from_slice(slice);
-                }
-                events
+                let all_events = unsafe { InputEvent::from_raw_bytes(&buf[..bytes_read]) };
+                all_events
+                    .into_iter()
+                    .filter_map(|ev| ev.try_into().ok())
+                    .collect()
             }
             Err(err) => {
-                eprintln!("Error reading events from dev: {err}");
+                eprintln!("Error reading events from dev: {err}.");
                 vec![]
             }
         }
     }
 
-    fn send_events(&mut self, events: &[KbdEvent]) {
+    fn send_events(
+        &mut self,
+        events: &[KbdEvent],
+    ) -> Result<(), std::sync::mpsc::SendError<KbdEvent>> {
         for event in events {
-            self.sender.send(*event).unwrap();
+            self.sender.send(*event)?;
         }
+
+        Ok(())
     }
 }
 
@@ -97,7 +102,12 @@ impl KbdEventListener for LinuxKeyboardEventListener {
     fn listen(&mut self) {
         let mut files = self.open_dev_files();
 
-        loop {
+        println!(
+            "Linux listener is ready to poll {} device files.",
+            files.len()
+        );
+
+        'listen: loop {
             // TODO: Bruh, this looks so bad. Maybe there is a way to not recreated `pollfds`
             // from `files` every time?
             let mut pollfds = self.create_poll_fds(&files);
@@ -119,14 +129,19 @@ impl KbdEventListener for LinuxKeyboardEventListener {
                 // Looks like `nix::poll::poll` doesn't modify order of elements (the
                 // example there uses the same approach) so it's safe to iterate together.
                 let events = self.read_events_from_dev(&mut files[idx]);
-                self.send_events(&events);
+                if let Err(err) = self.send_events(&events) {
+                    eprintln!("Failed to send events via channel: {err}.");
+                    break 'listen;
+                }
             }
         }
+
+        println!("Linux listener finished its loop.");
     }
 }
 
 pub fn get_all_kbd_devices() -> libudev::Result<Vec<DeviceFile>> {
-    // TODO: react in live for new connected devices.
+    // TODO: react in live for new connected devices?
     let mut devices = vec![];
 
     let ctx = libudev::Context::new()?;

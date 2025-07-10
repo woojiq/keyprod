@@ -25,9 +25,11 @@
             ];
             buildInputs = with pkgs; [
               systemd
+              clang
             ];
 
             LD_LIBRARY_PATH = libPath;
+            LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
 
             packages = with pkgs; [
               rust-analyzer
