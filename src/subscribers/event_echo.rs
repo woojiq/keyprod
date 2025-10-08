@@ -1,12 +1,10 @@
-use crate::input_event_codes::KEY_TO_STR_REPR;
-
 use super::KeyboardEventSubscriber;
 
-pub struct EventLogger {
+pub struct EventEcho {
     writer: Box<dyn std::io::Write + Send>,
 }
 
-impl EventLogger {
+impl EventEcho {
     pub fn new(writer: Box<dyn std::io::Write + Send>) -> Self {
         Self { writer }
     }
@@ -17,14 +15,14 @@ impl EventLogger {
     }
 }
 
-impl KeyboardEventSubscriber for EventLogger {
+impl KeyboardEventSubscriber for EventEcho {
     fn event_cb(&mut self, event: crate::kbd_event::KbdEvent) {
         if event.is_press() || event.is_release() {
             writeln!(
                 self.writer,
                 "{}({}) was {}",
-                KEY_TO_STR_REPR[event.code as usize],
                 event.code,
+                event.code as u16,
                 if event.is_press() {
                     "Pressed"
                 } else {

@@ -16,8 +16,8 @@ fn main() {
     let publisher_handler = std::thread::spawn(move || {
         let mut publisher = DefaultKeyboardEventPublisher::new(rx);
 
-        let event_logger = Box::new(keyprod::subscribers::EventLogger::new_stdout());
-        publisher.register_subscriber(event_logger);
+        let event_echo = Box::new(keyprod::subscribers::EventEcho::new_stdout());
+        publisher.register_subscriber(event_echo);
 
         publisher.run();
     });

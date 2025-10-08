@@ -1,107 +1,92 @@
-use std::io::Write;
+use quote::{ToTokens, quote};
 
 fn main() {
-    println!("cargo:rerun-if-changed=wrapper.h");
-
-    let bindings = bindgen::Builder::default()
-        .header("wrapper.h")
-        .allowlist_var("KEY_.*")
+    let bindings = bindgen::builder()
+        .header_contents(
+            "bindings.h",
+            "
+            #include <linux/input-event-codes.h>
+        ",
+        )
         .generate()
-        .expect("Unable to generate bindings");
+        .expect("Unable to generate bindings for input-event-codes.h");
 
-    let keyval = gen_bindings_keyval(&bindings.to_string());
-
-    let out_path = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap())
-        .join("input_event_codes_bindings.rs");
-    let mut out_file =
-        std::fs::File::create(out_path).expect("Couldn't create file to write bindings.");
+    let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
 
     bindings
-        .write(Box::new(&out_file))
-        .expect("Couldn't write bindings!");
+        .write_to_file(out_dir.join("input_bindings_raw.rs"))
+        .unwrap();
 
-    write!(out_file, "{keyval}").expect("Failed to write HashMap string to source file.");
-}
+    let parsed_bindings = syn::parse_str::<syn::File>(bindings.to_string().as_str())
+        .expect("Failed to parse generated bindings");
 
-// TODO: extract to separate crate and add unit tests
-fn gen_bindings_keyval(bindings: &str) -> String {
-    let vars = split_variables(bindings);
-    let max_key = vars.iter().map(|e| e.0).max().unwrap();
+    let mut enum_options = vec![];
+    let mut int_to_keycode = vec![];
+    let mut keycode_to_str = vec![];
 
-    let mut res = String::new();
+    let mut used_keycode = std::collections::HashSet::<String>::new();
 
-    res += "\n";
+    for item in &parsed_bindings.items {
+        let syn::Item::Const(const_var) = item else {
+            continue;
+        };
+        if !const_var.ident.to_string().starts_with("KEY_") {
+            continue;
+        }
 
-    res += &format!(
-        "pub const KEY_TO_STR_REPR: [&str; {}] = gen_keyval();\n",
-        max_key + 1
-    );
+        let ident = &const_var.ident;
+        let expr = &const_var.expr;
 
-    res += "\n";
+        let expr_str = expr.to_token_stream().to_string();
+        if used_keycode.contains(&expr_str) {
+            continue;
+        }
+        used_keycode.insert(expr_str);
 
-    res += &format!(
-        "const fn gen_keyval() -> [&'static str; {}] {{
-\tlet mut a = [\"\"; {}];\n",
-        max_key + 1,
-        max_key + 1
-    );
+        enum_options.push(quote! {
+            #ident = #expr,
+        });
 
-    res += "\n";
+        int_to_keycode.push(quote! {
+            #expr => Ok(Self::#ident),
+        });
 
-    for (key, val) in &vars {
-        res += &format!("\ta[{key}] = \"{val}\";\n");
+        keycode_to_str.push(quote! {
+            Self::#ident => stringify!(#ident),
+        });
     }
 
-    res += "\n";
+    let module = quote! {
+        #[allow(non_camel_case_types)]
+        #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+        pub enum Keycode {
+            #(#enum_options)*
+        }
 
-    res += "\
-\ta
-}\n";
+        impl TryFrom<u16> for Keycode {
+            type Error = ();
 
-    res
-}
+            fn try_from(val: u16) -> Result<Self, Self::Error> {
+                match val {
+                    #(#int_to_keycode)*
+                    _ => Err(()),
+                }
+            }
+        }
 
-fn split_variables(bindings: &str) -> Vec<(usize, String)> {
-    bindings
-        .lines()
-        .filter(|s| is_key_variable(s))
-        .map(keyval_from_binding)
-        .collect()
-}
+        impl std::fmt::Display for Keycode {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}",
+                    match *self {
+                        #(#keycode_to_str)*
+                    }
+                )
+            }
+        }
+    };
 
-fn is_key_variable(line: &str) -> bool {
-    line.starts_with("pub const KEY_")
-}
+    let keycode_ast = syn::parse2(module).unwrap();
+    let formatted = prettyplease::unparse(&keycode_ast);
 
-fn keyval_from_binding(binding: &str) -> (usize, String) {
-    (key_from_binding(binding), val_from_binding(binding))
-}
-
-// Example: pub const KEY_CAMERA_UP: u32 = 535;
-// Result: 535
-fn key_from_binding(binding: &str) -> usize {
-    binding
-        .split("= ")
-        .nth(1)
-        .unwrap()
-        .split(';')
-        .next()
-        .unwrap()
-        .parse()
-        .unwrap()
-}
-
-// Example: pub const KEY_CAMERA_UP: u32 = 535;
-// Result: CAMERA_UP
-fn val_from_binding(line: &str) -> String {
-    line.split(':')
-        .next()
-        .unwrap()
-        .split_whitespace()
-        .nth(2)
-        .unwrap()
-        .split_once('_')
-        .unwrap()
-        .1
-        .to_string()
+    std::fs::write(out_dir.join("keycode.rs"), formatted).unwrap();
 }
