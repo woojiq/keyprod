@@ -34,6 +34,6 @@ impl KeyboardEventSubscriber for EventEcho {
     }
 
     fn describe(&self) -> &'static str {
-        "EventLogger"
+        "EventEcho"
     }
 }

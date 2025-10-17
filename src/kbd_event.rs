@@ -47,7 +47,9 @@ impl TryFrom<InputEvent> for KbdEvent {
     fn try_from(value: InputEvent) -> Result<Self, Self::Error> {
         if value.0.type_ == crate::keycode::raw::EV_KEY as u16 {
             Ok(KbdEvent {
-                code: value.0.code.try_into().map_err(|_| ())?,
+                code: value.0.code.try_into().map_err(|_| {
+                    eprintln!("Unknown key code '{}'", value.0.code);
+                })?,
                 state: KbdKeyState::try_from(value.0.value)?,
             })
         } else {

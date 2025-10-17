@@ -34,6 +34,9 @@
             packages = with pkgs; [
               rust-analyzer
               rust-bin.stable."1.88.0".default
+
+              gdb
+              sqlite
             ];
           };
       }

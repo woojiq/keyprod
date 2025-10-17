@@ -4,3 +4,5 @@ result
 .helix/
 
 /target
+
+history.db*

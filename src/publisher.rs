@@ -22,7 +22,7 @@ impl DefaultKeyboardEventPublisher {
 
 impl KeyboardEventPublisher for DefaultKeyboardEventPublisher {
     fn run(&mut self) {
-        println!("Publisher is ready to receive events.");
+        eprintln!("Publisher is ready to receive events.");
 
         while let Ok(event) = self.receiver.recv() {
             for subscriber in &mut self.subscribers {
@@ -30,17 +30,17 @@ impl KeyboardEventPublisher for DefaultKeyboardEventPublisher {
             }
         }
 
-        println!("Publisher finished its loop.");
+        eprintln!("Publisher finished its loop.");
     }
 
     fn register_subscriber(&mut self, subscriber: Box<dyn KeyboardEventSubscriber>) {
-        println!(
+        eprintln!(
             "Publisher accepted new subscriber: '{}'.",
             subscriber.describe(),
         );
 
         self.subscribers.push(subscriber);
 
-        println!("Current number of subscribers: {}.", self.subscribers.len());
+        eprintln!("Current number of subscribers: {}.", self.subscribers.len());
     }
 }

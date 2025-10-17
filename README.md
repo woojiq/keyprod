@@ -4,6 +4,10 @@
 
 I know it's not secured, but [who's gonna stop me](https://www.youtube.com/watch?v=CcG0WpGBPcY).
 
+## Configuration
+
+* DB_PATH: environment variable during compilation to set the base directory for database. Default: `/var/lib/keyprod/`.
+
 # Design
 
 ## Plan

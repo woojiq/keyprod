@@ -8,6 +8,8 @@ use nix::poll::{PollFd, PollFlags, PollTimeout};
 
 use crate::kbd_event::{InputEvent, KbdEvent};
 
+static CONTINUE_LISTEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
 #[derive(Debug)]
 pub struct DeviceFile {
     path: std::path::PathBuf,
@@ -46,7 +48,7 @@ impl LinuxKeyboardEventListener {
 
                 match opened_file {
                     Ok(file) => {
-                        println!("Successfully opened {:?} for reading events.", dev.path);
+                        eprintln!("Successfully opened {:?} for reading events.", dev.path);
                         Some(file)
                     }
                     Err(dev_err) => {
@@ -102,12 +104,12 @@ impl KbdEventListener for LinuxKeyboardEventListener {
     fn listen(&mut self) {
         let mut files = self.open_dev_files();
 
-        println!(
+        eprintln!(
             "Linux listener is ready to poll {} device files.",
             files.len()
         );
 
-        'listen: loop {
+        'listen: while CONTINUE_LISTEN.load(std::sync::atomic::Ordering::SeqCst) {
             // TODO: Bruh, this looks so bad. Maybe there is a way to not recreated `pollfds`
             // from `files` every time?
             let mut pollfds = self.create_poll_fds(&files);
@@ -136,8 +138,13 @@ impl KbdEventListener for LinuxKeyboardEventListener {
             }
         }
 
-        println!("Linux listener finished its loop.");
+        eprintln!("Linux listener finished its loop.");
     }
+}
+
+pub fn stop_listening() {
+    eprintln!("Stop listening incoming events.");
+    CONTINUE_LISTEN.store(false, std::sync::atomic::Ordering::SeqCst)
 }
 
 pub fn get_all_kbd_devices() -> libudev::Result<Vec<DeviceFile>> {
