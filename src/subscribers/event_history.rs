@@ -6,6 +6,15 @@ pub struct EventHistory {
     logic: EventHistoryLogic<chrono::Local>,
 }
 
+struct EventHistoryLogic<T: CurrentLocalTime> {
+    stats: KeycodeStatisticsSql,
+    time: T,
+}
+
+struct KeycodeStatisticsSql {
+    db_con: rusqlite::Connection,
+}
+
 impl EventHistory {
     const DB_DIR: &'static str =
         crate::env_or!("DB_PATH", concat!("/var/lib/", env!("CARGO_PKG_NAME"), "/"));
@@ -52,11 +61,6 @@ impl KeyboardEventSubscriber for EventHistory {
     }
 }
 
-struct EventHistoryLogic<T: CurrentLocalTime> {
-    stats: KeycodeStatisticsSql,
-    time: T,
-}
-
 impl<T: CurrentLocalTime> EventHistoryLogic<T> {
     fn new(db_con: rusqlite::Connection, time: T) -> Self {
         Self {
@@ -74,10 +78,6 @@ impl<T: CurrentLocalTime> EventHistoryLogic<T> {
             self.stats.save_keypress(1, self.time.now().date_naive());
         }
     }
-}
-
-struct KeycodeStatisticsSql {
-    db_con: rusqlite::Connection,
 }
 
 impl KeycodeStatisticsSql {

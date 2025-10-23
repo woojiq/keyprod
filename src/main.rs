@@ -3,17 +3,20 @@ use keyprod::{
     publisher::{DefaultKeyboardEventPublisher, KeyboardEventPublisher},
 };
 
-extern "C" fn sigint_handler(_: libc::c_int) {
+extern "C" fn signal_handler(_: libc::c_int) {
     keyprod::kbd_event_listener::stop_listening();
 }
 
-fn get_sigint_handler() -> libc::sighandler_t {
-    sigint_handler as extern "C" fn(libc::c_int) as *mut libc::c_void as libc::sighandler_t
+fn get_signal_handler() -> libc::sighandler_t {
+    signal_handler as extern "C" fn(libc::c_int) as *mut libc::c_void as libc::sighandler_t
 }
 
 fn main() {
+    let args = keyprod::args::parse_args().unwrap();
+
     unsafe {
-        libc::signal(libc::SIGINT, get_sigint_handler());
+        libc::signal(libc::SIGINT, get_signal_handler());
+        libc::signal(libc::SIGTERM, get_signal_handler());
     }
 
     let (tx, rx) = std::sync::mpsc::channel::<keyprod::kbd_event::KbdEvent>();
@@ -26,14 +29,15 @@ fn main() {
     });
 
     let publisher_handler = std::thread::spawn(move || {
-        // TODO: cli args to enable/disable without recompilation.
         let mut publisher = DefaultKeyboardEventPublisher::new(rx);
 
-        let event_echo = Box::new(keyprod::subscribers::EventEcho::new_stdout());
-        publisher.register_subscriber(event_echo);
+        let subscribers = keyprod::subscribers::KeyboardEventSubscriberFactory::create_subscribers(
+            &args.subscribers,
+        );
 
-        let event_history = Box::new(keyprod::subscribers::EventHistory::new());
-        publisher.register_subscriber(event_history);
+        for subscriber in subscribers {
+            publisher.register_subscriber(subscriber);
+        }
 
         publisher.run();
     });

@@ -104,6 +104,10 @@ impl KbdEventListener for LinuxKeyboardEventListener {
     fn listen(&mut self) {
         let mut files = self.open_dev_files();
 
+        if files.is_empty() {
+            return;
+        }
+
         eprintln!(
             "Linux listener is ready to poll {} device files.",
             files.len()

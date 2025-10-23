@@ -1,5 +1,7 @@
 # KEY PRODuctivity
 
+Track keyboard productivity.
+
 ## Disclaimer
 
 I know it's not secured, but [who's gonna stop me](https://www.youtube.com/watch?v=CcG0WpGBPcY).

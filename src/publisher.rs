@@ -35,7 +35,7 @@ impl KeyboardEventPublisher for DefaultKeyboardEventPublisher {
 
     fn register_subscriber(&mut self, subscriber: Box<dyn KeyboardEventSubscriber>) {
         eprintln!(
-            "Publisher accepted new subscriber: '{}'.",
+            "Publisher accepted new subscriber: \"{}\".",
             subscriber.describe(),
         );
 

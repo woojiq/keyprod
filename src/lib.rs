@@ -1,5 +1,6 @@
 #![allow(clippy::new_without_default)]
 
+pub mod args;
 pub mod kbd_event;
 pub mod kbd_event_listener;
 pub mod keycode;

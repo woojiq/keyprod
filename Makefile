@@ -7,6 +7,6 @@ build:
 
 # TODO: add capabilities to binary using linux commands?
 run: build
-	sudo target/debug/keyprod
+	sudo target/debug/keyprod $(args)
 
 .PHONY: all build run
