@@ -17,10 +17,13 @@ impl KeyboardEventSubscriberFactory {
         Self {}
     }
 
-    pub fn create_subscriber(name: &str) -> Option<Box<dyn KeyboardEventSubscriber>> {
+    pub fn create_subscriber(
+        name: &str,
+        cli_args: &crate::args::Args,
+    ) -> Option<Box<dyn KeyboardEventSubscriber>> {
         match name {
             "echo" => Some(Box::new(EventEcho::new())),
-            "history" => Some(Box::new(EventHistory::new())),
+            "history" => Some(Box::new(EventHistory::new(&cli_args.state_dir))),
             _ => {
                 eprintln!("Subscriber with name '{name}' doesn't exist.");
                 None
@@ -28,10 +31,13 @@ impl KeyboardEventSubscriberFactory {
         }
     }
 
-    pub fn create_subscribers<T: AsRef<str>>(names: &[T]) -> Vec<Box<dyn KeyboardEventSubscriber>> {
-        names
+    pub fn create_subscribers(
+        cli_args: &crate::args::Args,
+    ) -> Vec<Box<dyn KeyboardEventSubscriber>> {
+        cli_args
+            .subscribers
             .iter()
-            .filter_map(|s| Self::create_subscriber(s.as_ref()))
+            .filter_map(|s| Self::create_subscriber(s.as_ref(), cli_args))
             .collect()
     }
 }

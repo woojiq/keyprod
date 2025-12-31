@@ -1,0 +1,15 @@
+[Unit]
+Description=Track keyboard productivity
+
+[Service]
+# TODO: full path is required
+ExecStart=keyprod --state=/var/lib/keyprod/ --plugins history
+Type=exec
+Restart=always
+
+[Install]
+# TODO: check if it works with gui.target in qemu.
+WantedBy=multi-user.target
+
+# TODO: Add hardening
+# TODO: test using qemu

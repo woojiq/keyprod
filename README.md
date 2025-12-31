@@ -6,33 +6,14 @@ Track keyboard productivity.
 
 I know it's not secured, but [who's gonna stop me](https://www.youtube.com/watch?v=CcG0WpGBPcY).
 
-## Configuration
+## Development
 
-* DB_PATH: environment variable during compilation to set the base directory for database. Default: `/var/lib/keyprod/`.
+To run debug build without sudo, add your user to "input" group.
 
-# Design
-
-## Plan
-
-Database: sqlite
-
-1. Store only total number of keypresses for each day.
-2.
-  1. Every minute (or 5) or on SIGTERM save in-memory statistics to database.
-  2. Save data to the corresponsing day.
-3. Make systemd service which must be started after login (for security concerns).
-
-This simple utility is not responsible for displaying data in "human" readable format. It will be done by another utility.
-
-## Database scheme
-
-Database name: keyprod.db
-Table name: KeyPresses
-Scheme:
-  * date text
-  * key int
-  * count int not null default 0
-  * primary key(date, key)
+```bash
+# Build and run locally
+make
+```
 
 ## Architecture
 

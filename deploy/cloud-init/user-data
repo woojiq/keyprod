@@ -1,0 +1,27 @@
+#cloud-config
+
+# After change user-data (without recreating vm): cloud-init clean --logs --reboot
+
+password: changeme
+chpasswd:
+  expire: False
+power_state:
+  mode: reboot
+write_files:
+- path: /etc/systemd/system/getty@tty1.service.d/autologin.conf
+  content: |
+    [Service]
+    ExecStart=
+    ExecStart=-/sbin/agetty --noreset --noclear --autologin ubuntu - ${TERM}
+package_upgrade: true
+packages:
+- build-essential
+- cmake
+- pkg-config
+runcmd:
+- export USER=ubuntu
+- export RUSTUP_HOME=/opt/rust
+- export CARGO_HOME=/opt/rust
+- curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y --no-modify-path --default-toolchain stable --profile default
+- echo '\n\n# added by cloud init\nsource /opt/rust/env' >> /home/$USER/.profile
+- sudo -H -u $USER bash -c 'source /opt/rust/env && rustup default stable'

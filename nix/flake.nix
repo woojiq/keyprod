@@ -37,6 +37,9 @@
 
               gdb
               sqlite
+              # TODO: qemu
+              cdrkit # genisoimage
+              libguestfs-with-appliance # guestfish
             ];
           };
       }

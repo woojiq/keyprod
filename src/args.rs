@@ -3,12 +3,14 @@ const VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " v", env!("CARGO_PKG_VERS
 
 pub struct Args {
     pub subscribers: Vec<String>,
+    pub state_dir: std::path::PathBuf,
 }
 
 impl Default for Args {
     fn default() -> Self {
         Self {
             subscribers: vec!["echo".into()],
+            state_dir: std::path::PathBuf::from("/var/lib/").join(PKG_NAME),
         }
     }
 }
@@ -30,6 +32,9 @@ pub fn parse_args() -> Result<Args, lexopt::Error> {
                     }
                 }
                 // Ignore error, it simply means 0 plugins were explicitly specified.
+            }
+            Long("state") => {
+                args.state_dir = parser.value()?.parse()?;
             }
             Long("help") => {
                 print_help();
@@ -67,6 +72,9 @@ Options:
     --plugins ...
         List of features to enable
         Available plugins: echo, history
+    --state=<dir>
+        Directory where application stores state information.
+        Default: /var/lib/keyprod/
     --help
         Prints help information
     --version

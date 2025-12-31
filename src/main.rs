@@ -31,9 +31,8 @@ fn main() {
     let publisher_handler = std::thread::spawn(move || {
         let mut publisher = DefaultKeyboardEventPublisher::new(rx);
 
-        let subscribers = keyprod::subscribers::KeyboardEventSubscriberFactory::create_subscribers(
-            &args.subscribers,
-        );
+        let subscribers =
+            keyprod::subscribers::KeyboardEventSubscriberFactory::create_subscribers(&args);
 
         for subscriber in subscribers {
             publisher.register_subscriber(subscriber);

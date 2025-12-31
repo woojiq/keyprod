@@ -1,12 +1,11 @@
-DB_PATH = "./"
-
 all: build run
 
 build:
-	DB_PATH="${DB_PATH}" cargo build
+	cargo build
 
-# TODO: add capabilities to binary using linux commands?
+# TODO: remove sudo
 run: build
-	sudo target/debug/keyprod $(args)
+	mkdir -p images
+	target/debug/keyprod --state=./ --plugins echo history $(args)
 
 .PHONY: all build run

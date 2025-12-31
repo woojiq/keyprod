@@ -16,13 +16,10 @@ struct KeycodeStatisticsSql {
 }
 
 impl EventHistory {
-    const DB_DIR: &'static str =
-        crate::env_or!("DB_PATH", concat!("/var/lib/", env!("CARGO_PKG_NAME"), "/"));
-
     const DB_NAME: &'static str = "history.db";
 
-    pub fn new() -> Self {
-        let db_path = Self::get_db_path();
+    pub fn new(state_dir: &std::path::Path) -> Self {
+        let db_path = Self::get_db_path(state_dir);
         Self::precreate_dir(&db_path).unwrap();
 
         eprintln!("Trying to open history db at {db_path:?}");
@@ -35,9 +32,9 @@ impl EventHistory {
         }
     }
 
-    fn get_db_path() -> std::path::PathBuf {
+    fn get_db_path(state_dir: &std::path::Path) -> std::path::PathBuf {
         std::path::PathBuf::new()
-            .join(Self::DB_DIR)
+            .join(state_dir)
             .join(Self::DB_NAME)
     }
 
