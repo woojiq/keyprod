@@ -1,11 +1,10 @@
-DB_PATH = "./"
+STATE_DIR = "./"
 
 all: build run
 
 build:
-	DB_PATH="${DB_PATH}" cargo build
+	STATE_DIR="${DB_PATH}" cargo build
 
-# TODO: add capabilities to binary using linux commands?
 run: build
 	sudo target/debug/keyprod $(args)
 

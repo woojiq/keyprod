@@ -2,13 +2,13 @@ const PKG_NAME: &str = env!("CARGO_PKG_NAME");
 const VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " v", env!("CARGO_PKG_VERSION"));
 
 pub struct Args {
-    pub subscribers: Vec<String>,
+    pub plugins: Vec<String>,
 }
 
 impl Default for Args {
     fn default() -> Self {
         Self {
-            subscribers: vec!["echo".into()],
+            plugins: vec!["echo".into()],
         }
     }
 }
@@ -17,7 +17,7 @@ pub fn parse_args() -> Result<Args, lexopt::Error> {
     use lexopt::prelude::*;
 
     let mut args = Args::default();
-    let mut subscribers = vec![];
+    let mut plugins = vec![];
 
     let mut parser = lexopt::Parser::from_env();
 
@@ -26,7 +26,7 @@ pub fn parse_args() -> Result<Args, lexopt::Error> {
             Long("plugins") => {
                 if let Ok(vals) = parser.values() {
                     for val in vals {
-                        subscribers.push(val.parse()?);
+                        plugins.push(val.parse()?);
                     }
                 }
                 // Ignore error, it simply means 0 plugins were explicitly specified.
@@ -43,9 +43,7 @@ pub fn parse_args() -> Result<Args, lexopt::Error> {
         }
     }
 
-    if !subscribers.is_empty() {
-        args.subscribers = subscribers;
-    }
+    args.plugins = plugins;
 
     Ok(args)
 }

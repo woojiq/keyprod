@@ -4,7 +4,7 @@ use std::{
     os::{fd::AsFd, unix::fs::OpenOptionsExt},
 };
 
-use nix::poll::{PollFd, PollFlags, PollTimeout};
+use nix::poll::{PollFd, PollFlags};
 
 use crate::kbd_event::{InputEvent, KbdEvent};
 
@@ -22,19 +22,19 @@ impl DeviceFile {
 }
 
 pub trait KbdEventListener {
-    fn listen(&mut self);
+    fn listen(&mut self, tx: std::sync::mpsc::Sender<KbdEvent>);
 }
 
 pub struct LinuxKeyboardEventListener {
-    sender: std::sync::mpsc::Sender<KbdEvent>,
     devices: Vec<DeviceFile>,
 }
 
 impl LinuxKeyboardEventListener {
+    // TODO: I'm not 100% sure that a character device can store more than 1 event.
     const MAX_EVENTS_PER_READ: usize = 16;
 
-    pub fn new(sender: std::sync::mpsc::Sender<KbdEvent>, devices: Vec<DeviceFile>) -> Self {
-        Self { sender, devices }
+    pub fn new(devices: Vec<DeviceFile>) -> Self {
+        Self { devices }
     }
 
     fn open_dev_files(&mut self) -> Vec<File> {
@@ -90,10 +90,11 @@ impl LinuxKeyboardEventListener {
 
     fn send_events(
         &mut self,
+        tx: &std::sync::mpsc::Sender<KbdEvent>,
         events: &[KbdEvent],
     ) -> Result<(), std::sync::mpsc::SendError<KbdEvent>> {
         for event in events {
-            self.sender.send(*event)?;
+            tx.send(*event)?;
         }
 
         Ok(())
@@ -101,7 +102,7 @@ impl LinuxKeyboardEventListener {
 }
 
 impl KbdEventListener for LinuxKeyboardEventListener {
-    fn listen(&mut self) {
+    fn listen(&mut self, tx: std::sync::mpsc::Sender<KbdEvent>) {
         let mut files = self.open_dev_files();
 
         if files.is_empty() {
@@ -119,7 +120,13 @@ impl KbdEventListener for LinuxKeyboardEventListener {
             let mut pollfds = self.create_poll_fds(&files);
             assert_eq!(files.len(), pollfds.len());
 
-            let _ = nix::poll::poll(&mut pollfds, PollTimeout::NONE).unwrap();
+            if let Err(errno) = nix::poll::poll(
+                &mut pollfds,
+                nix::poll::PollTimeout::try_from(std::time::Duration::from_millis(100u64))
+                    .expect("SAFETY: value in millis fits in i32"),
+            ) {
+                eprintln!("Failed to poll input FDs: {errno}");
+            }
 
             // We need to collect to get drop of `pollfds` and make borrow checker happy.
             let need_poll = pollfds
@@ -135,7 +142,7 @@ impl KbdEventListener for LinuxKeyboardEventListener {
                 // Looks like `nix::poll::poll` doesn't modify order of elements (the
                 // example there uses the same approach) so it's safe to iterate together.
                 let events = self.read_events_from_dev(&mut files[idx]);
-                if let Err(err) = self.send_events(&events) {
+                if let Err(err) = self.send_events(&tx, &events) {
                     eprintln!("Failed to send events via channel: {err}.");
                     break 'listen;
                 }
@@ -151,10 +158,12 @@ pub fn stop_listening() {
     CONTINUE_LISTEN.store(false, std::sync::atomic::Ordering::SeqCst)
 }
 
-pub fn get_all_kbd_devices() -> libudev::Result<Vec<DeviceFile>> {
+fn get_all_kbd_devices() -> libudev::Result<Vec<DeviceFile>> {
     // TODO: react in live for new connected devices?
     let mut devices = vec![];
 
+    // TODO: check if it detects uinput. If yes, we need to add uinput to systemd hardening.
+    // https://www.kernel.org/doc/html/v4.12/input/uinput.html
     let ctx = libudev::Context::new()?;
     let mut enumer = libudev::Enumerator::new(&ctx)?;
     for dev in enumer.scan_devices()? {
@@ -170,4 +179,17 @@ pub fn get_all_kbd_devices() -> libudev::Result<Vec<DeviceFile>> {
     }
 
     Ok(devices)
+}
+
+pub fn spawn_kbd_event_listener_thread(
+    tx: std::sync::mpsc::Sender<KbdEvent>,
+) -> anyhow::Result<std::thread::JoinHandle<()>> {
+    let devices = get_all_kbd_devices()?;
+
+    let listener_handler = std::thread::spawn(move || {
+        let mut listener = LinuxKeyboardEventListener::new(devices);
+        listener.listen(tx);
+    });
+
+    Ok(listener_handler)
 }

@@ -4,9 +4,14 @@ pub mod args;
 pub mod kbd_event;
 pub mod kbd_event_listener;
 pub mod keycode;
+pub mod plugins;
 pub mod publisher;
-pub mod subscribers;
 pub mod time;
+
+pub const STATE_DIR: &str = env_or!(
+    "STATE_DIR",
+    concat!("/var/lib/", env!("CARGO_PKG_NAME"), "/")
+);
 
 #[macro_export]
 // https://github.com/rharish101/ReGreet/blob/a011d5d557c11e7a7d63eaa6cf061618721c81bc/src/constants.rs#L9
@@ -21,4 +26,16 @@ macro_rules! env_or {
             $default
         }
     };
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum Event {
+    KeyEvent(kbd_event::KbdEvent),
+    PluginStop,
+}
+
+impl From<kbd_event::KbdEvent> for Event {
+    fn from(value: kbd_event::KbdEvent) -> Self {
+        Self::KeyEvent(value)
+    }
 }

@@ -1,4 +1,4 @@
-use super::KeyboardEventSubscriber;
+use super::Plugin;
 
 pub struct EventEcho {
     logic: EventEchoLogic,
@@ -17,13 +17,19 @@ impl EventEcho {
     }
 }
 
-impl KeyboardEventSubscriber for EventEcho {
-    fn event_cb(&mut self, event: crate::kbd_event::KbdEvent) {
-        self.logic.register_keypress(event);
-    }
-
+#[async_trait::async_trait]
+impl Plugin for EventEcho {
     fn describe(&self) -> &'static str {
         "EventEchoLogic"
+    }
+
+    async fn run(&mut self, mut rx: tokio::sync::mpsc::Receiver<crate::Event>) {
+        while let Some(event) = rx.recv().await {
+            match event {
+                crate::Event::KeyEvent(kbd_ev) => self.logic.register_keypress(kbd_ev),
+                crate::Event::PluginStop => break,
+            }
+        }
     }
 }
 
