@@ -1,59 +1,91 @@
-const PKG_NAME: &str = env!("CARGO_PKG_NAME");
-const VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " v", env!("CARGO_PKG_VERSION"));
+use crate::{
+    PKG_NAME, VERSION,
+    plugins::{PLUGINS, PluginConfig, PluginFactory},
+};
+use lexopt::prelude::*;
 
 pub struct Args {
-    pub plugins: Vec<String>,
+    pub plugins: Vec<Box<dyn PluginConfig>>,
+    pub general: GeneralArgs,
 }
 
-impl Default for Args {
-    fn default() -> Self {
+pub struct GeneralArgs {}
+
+impl Args {
+    pub fn new() -> Self {
         Self {
-            plugins: vec!["echo".into()],
+            plugins: vec![],
+            general: GeneralArgs {},
         }
     }
-}
 
-pub fn parse_args() -> Result<Args, lexopt::Error> {
-    use lexopt::prelude::*;
+    pub fn parse() -> Result<Self, lexopt::Error> {
+        let mut args = Self::new();
 
-    let mut args = Args::default();
-    let mut plugins = vec![];
+        let mut parser = lexopt::Parser::from_env();
 
-    let mut parser = lexopt::Parser::from_env();
+        args.parse_app_args(&mut parser)?;
+        args.parse_plugins_args(&mut parser)?;
 
-    while let Some(arg) = parser.next()? {
-        match arg {
-            Long("plugins") => {
-                if let Ok(vals) = parser.values() {
-                    for val in vals {
-                        plugins.push(val.parse()?);
-                    }
+        Ok(args)
+    }
+
+    fn parse_app_args(&mut self, parser: &mut lexopt::Parser) -> Result<(), lexopt::Error> {
+        #[allow(clippy::never_loop)]
+        while let Some(arg) = parser.next()? {
+            match arg {
+                Long("help") => {
+                    print_help(&PLUGINS);
+                    std::process::exit(0);
                 }
-                // Ignore error, it simply means 0 plugins were explicitly specified.
+                Long("version") => {
+                    print_version();
+                    std::process::exit(0);
+                }
+                Long("plugin") => break,
+                _ => return Err(arg.unexpected()),
             }
-            Long("help") => {
-                print_help();
-                std::process::exit(0);
-            }
-            Long("version") => {
-                print_version();
-                std::process::exit(0);
-            }
-            _ => return Err(arg.unexpected()),
         }
+
+        Ok(())
     }
 
-    args.plugins = plugins;
+    fn parse_plugins_args(&mut self, parser: &mut lexopt::Parser) -> Result<(), lexopt::Error> {
+        let mut args = vec![];
 
-    Ok(args)
+        let mut raw_args = parser.try_raw_args().ok_or(lexopt::Error::MissingValue {
+            option: Some("plugin".into()),
+        })?;
+
+        let mut expect_plugin = true;
+        while expect_plugin {
+            expect_plugin = false;
+
+            for arg in &mut raw_args {
+                if arg == "--plugin" {
+                    expect_plugin = true;
+                    break;
+                } else {
+                    args.push(arg);
+                }
+            }
+
+            self.plugins
+                .push(crate::plugins::parse_plugin_from_args(std::mem::take(
+                    &mut args,
+                ))?);
+        }
+
+        Ok(())
+    }
 }
 
 pub fn print_version() {
     println!("{VERSION}");
 }
 
-pub fn print_help() {
-    println!(
+pub fn print_help(plugins: &[&dyn PluginFactory]) {
+    let mut help_msg = format!(
         "\
 {VERSION}
 Track keyboard productivity.
@@ -62,13 +94,21 @@ Usage:
     {PKG_NAME} [options]
 
 Options:
-    --plugins ...
-        List of features to enable
-        Available plugins: echo, history
+    --plugin <plugin-name> [plugin-options]...
+        Enable plugin and configure it. Multiple plugins can be enabled.
     --help
-        Prints help information
+        Print help information.
     --version
-        Prints version
-    "
+        Print version.
+
+Available plugins:
+
+"
     );
+
+    for plugin in plugins {
+        help_msg += &format!("* Plugin: {}\n{}\n", plugin.cli_name(), plugin.help());
+    }
+
+    println!("{help_msg}");
 }

@@ -6,16 +6,34 @@ Track keyboard productivity.
 
 I know it's not secured, but [who's gonna stop me](https://www.youtube.com/watch?v=CcG0WpGBPcY).
 
+I know it's overengineering to create "plugin" system for the problem that could be solved using 200loc project. But who cares. Programming is about fun.
+
 ## TODO
-- [ ] Benchmark two solutions (old and new). Use uinput to emulate input: https://www.kernel.org/doc/html/v4.12/input/uinput.html
-- [ ] Rework README and make more configuration for plugins.
-- [ ] Remove all unwrap and expect
 - [ ] Proper logging/stdout/err
-- [ ] Unit tests
+- [ ] Rework kdb_event_listener
+- [ ] Unit tests: https://jorgeortiz.dev/posts/rust_unit_testing_file_reading/
+- [ ] Benchmark two solutions (old and new). Use uinput to emulate input: https://www.kernel.org/doc/html/v4.12/input/uinput.html
+- [ ] Rework README
 
 ## Configuration
 
-* STATE_DIR: environment variable during compilation to set the base directory for plugin states. Default: `/var/lib/keyprod/`.
+There are two available plugins at the moment:
+* echo (plugins/echo.rs): prints keypress events to a destination (by default `stdout`).
+* history (plugins/history.rs): saves the number of keypresses made in each day to the db. Only the **total number** of keystrokes for each day is stored, there is no separate number for each key.
+
+For more information about possible options run: `keyprod --help`.
+
+Examples:
+```sh
+# Listens for keyboard events in real time and prints to stdout.
+keyprod --plugin echo
+
+# Listens for keyboard events and stores the number of keypresses to the db.
+keyprod --plugin history
+
+# Combination of previous two commands with redefined path for the db.
+keyprod --plugin echo stderr --plugin history --db-path="./history.db"
+```
 
 # Design
 

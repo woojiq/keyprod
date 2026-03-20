@@ -123,7 +123,7 @@ impl KbdEventListener for LinuxKeyboardEventListener {
             if let Err(errno) = nix::poll::poll(
                 &mut pollfds,
                 nix::poll::PollTimeout::try_from(std::time::Duration::from_millis(100u64))
-                    .expect("SAFETY: value in millis fits in i32"),
+                    .expect("SAFETY: 100 millis fits in i32"),
             ) {
                 eprintln!("Failed to poll input FDs: {errno}");
             }

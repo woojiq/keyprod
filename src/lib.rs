@@ -8,25 +8,10 @@ pub mod plugins;
 pub mod publisher;
 pub mod time;
 
-pub const STATE_DIR: &str = env_or!(
-    "STATE_DIR",
-    concat!("/var/lib/", env!("CARGO_PKG_NAME"), "/")
-);
+pub const PKG_NAME: &str = env!("CARGO_PKG_NAME");
+pub const VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " v", env!("CARGO_PKG_VERSION"));
 
-#[macro_export]
-// https://github.com/rharish101/ReGreet/blob/a011d5d557c11e7a7d63eaa6cf061618721c81bc/src/constants.rs#L9
-/// Get an environment variable during compile time, else return a default.
-macro_rules! env_or {
-    ($name:expr, $default:expr) => {
-        // This is needed because `Option.unwrap_or` is not a const fn:
-        // https://github.com/rust-lang/rust/issues/91930
-        if let Some(value) = option_env!($name) {
-            value
-        } else {
-            $default
-        }
-    };
-}
+pub const STATE_DIR: &str = concat!("/var/lib/", env!("CARGO_PKG_NAME"), "/");
 
 #[derive(Copy, Clone, Debug)]
 pub enum Event {

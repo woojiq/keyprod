@@ -2,11 +2,9 @@ use crate::time::CurrentLocalTime;
 
 use super::Plugin;
 
-pub struct EventHistory {
-    logic: EventHistoryLogic<chrono::Local>,
-}
+const PLUGIN_NAME: &str = "History";
 
-struct EventHistoryLogic<T: CurrentLocalTime> {
+pub struct PluginHistory<T: CurrentLocalTime> {
     unsaved_events: u64,
 
     stats_db: KeycodeStatisticsSql,
@@ -17,43 +15,65 @@ struct KeycodeStatisticsSql {
     db_con: rusqlite::Connection,
 }
 
-impl EventHistory {
-    const DB_NAME: &'static str = "history.db";
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("{0}")]
+    Db(#[from] rusqlite::Error),
+}
 
-    pub fn new() -> Self {
-        let db_path = Self::get_db_path();
-        Self::precreate_dir(&db_path).expect("Failed to precreate dir");
+pub type Result<T, E = Error> = std::result::Result<T, E>;
 
-        eprintln!("Trying to open history db at {db_path:?}");
+#[derive(Clone)]
+pub struct PluginHistoryConfig {
+    db_path: std::path::PathBuf,
+}
 
+pub struct PluginHistoryFactory;
+
+impl<T: CurrentLocalTime> PluginHistory<T> {
+    fn new(stats_db: KeycodeStatisticsSql, time: T) -> Self {
         Self {
-            logic: EventHistoryLogic::new(
-                rusqlite::Connection::open(db_path).expect("Failed to open db"),
-                chrono::Local {},
-            ),
+            unsaved_events: 0,
+            stats_db,
+            time,
         }
     }
 
-    fn get_db_path() -> std::path::PathBuf {
-        std::path::PathBuf::new()
-            .join(crate::STATE_DIR)
-            .join(Self::DB_NAME)
+    pub fn init(value: PluginHistoryConfig, time: T) -> Result<Self> {
+        let sql = KeycodeStatisticsSql::new(&value.db_path)?;
+
+        Ok(Self::new(sql, time))
     }
 
-    fn precreate_dir(path: &std::path::Path) -> std::io::Result<()> {
-        if let Some(dir) = path.parent() {
-            if !dir.exists() {
-                return std::fs::create_dir_all(dir);
-            }
+    fn save_keypress_in_cache(&mut self, event: crate::kbd_event::KbdEvent) {
+        if !event.is_press() {
+            return;
         }
+
+        if !event.code.is_modifier() {
+            self.unsaved_events += 1;
+        }
+    }
+
+    fn sync_db_with_cache(&mut self) -> Result<()> {
+        if self.unsaved_events != 0 {
+            self.stats_db
+                .save_keypress(self.unsaved_events, self.time.now().date_naive())
+                .inspect_err(|err| eprintln!("Failed to save keypresses to the db: {err}"))?;
+
+            eprintln!("Saved {} keypresses into db.", self.unsaved_events);
+            self.unsaved_events = 0;
+        }
+
         Ok(())
     }
 }
 
 #[async_trait::async_trait]
-impl Plugin for EventHistory {
-    fn describe(&self) -> &'static str {
-        "EventHistory"
+impl<T: CurrentLocalTime> Plugin for PluginHistory<T> {
+    // TODO: think whether we need `name` function in each trait.
+    fn name(&self) -> &'static str {
+        PLUGIN_NAME
     }
 
     async fn run(&mut self, mut rx: tokio::sync::mpsc::Receiver<crate::Event>) {
@@ -67,78 +87,72 @@ impl Plugin for EventHistory {
                     };
 
                     match event {
-                        crate::Event::KeyEvent(kbd_ev) => self.logic.save_keypress_inmemory(kbd_ev),
-                        crate::Event::PluginStop => self.logic.save_keypresses_in_db(),
+                        crate::Event::KeyEvent(kbd_ev) => self.save_keypress_in_cache(kbd_ev),
+                        crate::Event::PluginStop => if let Err(err) = self.sync_db_with_cache() {
+                            eprintln!("Failed to write cached events to the db: {err}");
+                        }
                     }
                 },
                 _ = interval.tick() => {
-                    self.logic.save_keypresses_in_db();
+                    if let Err(err) = self.sync_db_with_cache() {
+                        eprintln!("Failed to write cached events to the db: {err}");
+                    }
                 }
             };
         }
     }
 }
 
-impl<T: CurrentLocalTime> EventHistoryLogic<T> {
-    fn new(db_con: rusqlite::Connection, time: T) -> Self {
-        Self {
-            unsaved_events: 0,
-
-            stats_db: KeycodeStatisticsSql::new(db_con),
-            time,
-        }
-    }
-
-    fn save_keypress_inmemory(&mut self, event: crate::kbd_event::KbdEvent) {
-        if !event.is_press() {
-            return;
-        }
-
-        if !event.code.is_modifier() {
-            self.unsaved_events += 1;
-        }
-    }
-
-    fn save_keypresses_in_db(&mut self) {
-        if self.unsaved_events != 0 {
-            self.stats_db
-                .save_keypress(self.unsaved_events, self.time.now().date_naive());
-
-            eprintln!("Saved {} keypresses into db.", self.unsaved_events);
-            self.unsaved_events = 0;
-        }
-    }
-}
-
 impl KeycodeStatisticsSql {
-    pub fn new(db_con: rusqlite::Connection) -> Self {
-        let mut obj = Self { db_con };
+    #[cfg(test)]
+    pub fn in_memory() -> Result<Self> {
+        let mut obj = Self {
+            db_con: rusqlite::Connection::open_in_memory()?,
+        };
 
-        obj.enable_wal();
-        obj.create_table();
+        obj.setup()?;
 
-        obj
+        Ok(obj)
     }
 
-    fn enable_wal(&mut self) {
+    pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+        eprintln!("Trying to open db {:?}", path.as_ref());
+        let mut obj = Self {
+            db_con: rusqlite::Connection::open(path.as_ref())?,
+        };
+
+        obj.setup()?;
+
+        Ok(obj)
+    }
+
+    fn setup(&mut self) -> Result<()> {
+        self.enable_wal()?;
+        self.create_table()?;
+
+        Ok(())
+    }
+
+    fn enable_wal(&mut self) -> Result<()> {
         // Without WAL we can't read db while the service is running in the background:
         // Parse error: database is locked (5)
-        self.db_con
-            .pragma_update(None, "journal_mode", "WAL")
-            .unwrap();
+        self.db_con.pragma_update(None, "journal_mode", "WAL")?;
+        Ok(())
     }
 
-    fn create_table(&mut self) {
+    fn create_table(&mut self) -> Result<()> {
         const CMD: &str = "
             CREATE TABLE IF NOT EXISTS Statistics (
                 Date TEXT PRIMARY KEY,
                 KeypressCnt INT NOT NULL DEFAULT 0
             )
         ";
-        self.db_con.execute(CMD, []).unwrap();
+
+        self.db_con.execute(CMD, [])?;
+        Ok(())
     }
 
-    pub fn save_keypress(&mut self, cnt: u64, date: chrono::NaiveDate) {
+    pub fn save_keypress(&mut self, cnt: u64, date: chrono::NaiveDate) -> Result<()> {
         let update_query = "
             INSERT INTO Statistics(Date, KeypressCnt)
             VALUES(?1, ?2)
@@ -146,22 +160,84 @@ impl KeycodeStatisticsSql {
             DO UPDATE SET KeypressCnt = KeypressCnt + ?2
          ";
 
-        let _ = self
-            .db_con
-            .execute(update_query, [date.to_string(), cnt.to_string()]);
+        self.db_con
+            .execute(update_query, [date.to_string(), cnt.to_string()])?;
+
+        Ok(())
+    }
+}
+
+impl Default for PluginHistoryConfig {
+    fn default() -> Self {
+        Self {
+            db_path: std::path::PathBuf::from(crate::STATE_DIR).join("history.db"),
+        }
+    }
+}
+
+impl super::PluginConfig for PluginHistoryConfig {
+    fn name(&self) -> &'static str {
+        PLUGIN_NAME
+    }
+
+    fn try_init_plugin(
+        self: Box<Self>,
+    ) -> Result<Box<dyn Plugin>, Box<dyn std::error::Error + Send + Sync>> {
+        match PluginHistory::init(*self, chrono::Local {}) {
+            Ok(pl) => Ok(Box::new(pl)),
+            Err(err) => Err(Box::new(err)),
+        }
+    }
+}
+
+impl super::PluginFactory for PluginHistoryFactory {
+    fn cli_name(&self) -> &'static str {
+        "history"
+    }
+
+    fn help(&self) -> String {
+        "\
+Stores the number of keyboard presses for each day in a database.
+Only regular keys are counted, modifiers (like Shift) are ignored.
+Useful to monitor your performance on the computer (if you run this program as a service).
+Options:
+    --db-path <path>
+        Absolute path to the db where to store the number of daily keyboard presses.
+
+        [default: /var/lib/keyprod/history.db]
+"
+        .to_string()
+    }
+
+    fn parse_args(
+        &self,
+        parser: &mut lexopt::Parser,
+    ) -> Result<Box<dyn super::PluginConfig>, lexopt::Error> {
+        use lexopt::prelude::*;
+
+        let mut config = PluginHistoryConfig::default();
+
+        while let Some(arg) = parser.next()? {
+            match arg {
+                Long("db-path") => config.db_path = parser.value()?.into(),
+                _ => return Err(arg.unexpected()),
+            }
+        }
+
+        Ok(Box::new(config))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use chrono::TimeZone;
+    // use chrono::TimeZone;
 
-    use crate::{
-        kbd_event::{KbdEvent, KbdKeyState},
-        keycode::Keycode,
-    };
+    // use crate::{
+    //     kbd_event::{KbdEvent, KbdKeyState},
+    //     keycode::Keycode,
+    // };
 
-    use super::*;
+    // use super::*;
 
     // #[test]
     // fn basic_test() {

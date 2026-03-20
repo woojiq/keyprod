@@ -1,5 +1,5 @@
 #[cfg_attr(test, mockall::automock)]
-pub trait CurrentLocalTime {
+pub trait CurrentLocalTime: Send {
     fn now(&self) -> chrono::DateTime<chrono::Local>;
 }
 

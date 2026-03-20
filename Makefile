@@ -1,9 +1,7 @@
-STATE_DIR = "./"
-
 all: build run
 
 build:
-	STATE_DIR="${DB_PATH}" cargo build
+	cargo build
 
 run: build
 	sudo target/debug/keyprod $(args)

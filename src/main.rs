@@ -13,7 +13,7 @@ fn get_signal_handler() -> libc::sighandler_t {
 }
 
 fn main() -> anyhow::Result<()> {
-    let args = keyprod::args::parse_args().context("Failed to parse command line args")?;
+    let args = keyprod::args::Args::parse()?;
 
     unsafe {
         libc::signal(libc::SIGINT, get_signal_handler());
@@ -25,7 +25,7 @@ fn main() -> anyhow::Result<()> {
     let listener_thread = spawn_kbd_event_listener_thread(kbd_tx)
         .context("Failed to spawn kbd event listener thread")?;
 
-    let (plugins_runtime_thread, txs_to_plugins) = spawn_plugins_runtime_thread(&args.plugins)
+    let (plugins_runtime_thread, txs_to_plugins) = spawn_plugins_runtime_thread(args.plugins)
         .context("Failed to spawn plugins runtime thread")?;
 
     let publisher_thread = spawn_publisher_thread(kbd_rx, txs_to_plugins)
