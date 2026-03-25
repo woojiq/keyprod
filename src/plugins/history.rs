@@ -59,9 +59,9 @@ impl<T: CurrentLocalTime> PluginHistory<T> {
         if self.unsaved_events != 0 {
             self.stats_db
                 .save_keypress(self.unsaved_events, self.time.now().date_naive())
-                .inspect_err(|err| eprintln!("Failed to save keypresses to the db: {err}"))?;
+                .inspect_err(|err| log::error!("Failed to save keypresses to the db: {err}"))?;
 
-            eprintln!("Saved {} keypresses into db.", self.unsaved_events);
+            log::debug!("Saved {} keypresses into db.", self.unsaved_events);
             self.unsaved_events = 0;
         }
 
@@ -89,13 +89,13 @@ impl<T: CurrentLocalTime> Plugin for PluginHistory<T> {
                     match event {
                         crate::Event::KeyEvent(kbd_ev) => self.save_keypress_in_cache(kbd_ev),
                         crate::Event::PluginStop => if let Err(err) = self.sync_db_with_cache() {
-                            eprintln!("Failed to write cached events to the db: {err}");
+                            log::error!("Failed to write cached events to the db: {err}");
                         }
                     }
                 },
                 _ = interval.tick() => {
                     if let Err(err) = self.sync_db_with_cache() {
-                        eprintln!("Failed to write cached events to the db: {err}");
+                        log::error!("Failed to write cached events to the db: {err}");
                     }
                 }
             };
@@ -116,7 +116,7 @@ impl KeycodeStatisticsSql {
     }
 
     pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
-        eprintln!("Trying to open db {:?}", path.as_ref());
+        log::info!("Trying to open db {:?}", path.as_ref());
         let mut obj = Self {
             db_con: rusqlite::Connection::open(path.as_ref())?,
         };

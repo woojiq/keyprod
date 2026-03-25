@@ -1,6 +1,6 @@
 use crate::{
     PKG_NAME, VERSION,
-    plugins::{PLUGINS, PluginConfig, PluginFactory},
+    plugins::{PLUGINS, PluginConfig},
 };
 use lexopt::prelude::*;
 
@@ -24,6 +24,8 @@ impl Args {
 
         let mut parser = lexopt::Parser::from_env();
 
+        // FIXME: sudo target/debug/keyprod
+        // Error: missing argument for option '<plugin_name>'
         args.parse_app_args(&mut parser)?;
         args.parse_plugins_args(&mut parser)?;
 
@@ -35,7 +37,7 @@ impl Args {
         while let Some(arg) = parser.next()? {
             match arg {
                 Long("help") => {
-                    print_help(&PLUGINS);
+                    print_help();
                     std::process::exit(0);
                 }
                 Long("version") => {
@@ -84,11 +86,15 @@ pub fn print_version() {
     println!("{VERSION}");
 }
 
-pub fn print_help(plugins: &[&dyn PluginFactory]) {
+pub fn print_help() {
     let mut help_msg = format!(
         "\
 {VERSION}
 Track keyboard productivity.
+
+By default, logs with level \"info\" or higher are printed. To control the log level, use the
+environment variable \"RUST_LOG\". For example, \"RUST_LOG=warn\" to reduce the verbosity to only
+warnings and error messages; or \"RUST_LOG=debug\" to include debug messages.
 
 Usage:
     {PKG_NAME} [options]
@@ -106,7 +112,7 @@ Available plugins:
 "
     );
 
-    for plugin in plugins {
+    for plugin in PLUGINS {
         help_msg += &format!("* Plugin: {}\n{}\n", plugin.cli_name(), plugin.help());
     }
 

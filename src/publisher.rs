@@ -30,17 +30,13 @@ impl DefaultKeyboardEventPublisher {
 
 impl KeyboardEventPublisher for DefaultKeyboardEventPublisher {
     fn run(&mut self) {
-        eprintln!("Publisher is ready to receive events.");
-
         while let Ok(kbd_event) = self.kbd_event_rcv.recv() {
             self.send_to_all(kbd_event.into());
         }
 
-        eprintln!("Stopping all plugins.");
+        log::info!("Stopping all plugins.");
 
         self.send_to_all(crate::Event::PluginStop);
-
-        eprintln!("Publisher finished its loop.");
     }
 }
 

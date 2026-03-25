@@ -67,7 +67,7 @@ impl EventEcho {
                     "Released"
                 },
             ) {
-                eprintln!("Failed to log keypress: {err}");
+                log::error!("Failed to log keypress: {err}");
             }
         }
     }
@@ -112,6 +112,7 @@ impl super::PluginFactory for EventEchoFactory {
     fn help(&self) -> String {
         "\
 Log keyboard events as is.
+By default if the plugin is enabled it prints to stdout.
 Options:
     --stdout|stderr
         Print events to stdout|stderr.

@@ -48,13 +48,14 @@ impl LinuxKeyboardEventListener {
 
                 match opened_file {
                     Ok(file) => {
-                        eprintln!("Successfully opened {:?} for reading events.", dev.path);
+                        log::info!("Successfully opened {:?} for reading events.", dev.path);
                         Some(file)
                     }
                     Err(dev_err) => {
-                        eprintln!(
+                        log::error!(
                             "Failed to open device file {:?} to read: {}.",
-                            dev.path, dev_err
+                            dev.path,
+                            dev_err
                         );
                         None
                     }
@@ -82,7 +83,7 @@ impl LinuxKeyboardEventListener {
                     .collect()
             }
             Err(err) => {
-                eprintln!("Error reading events from dev: {err}.");
+                log::error!("Error reading events from dev: {err}.");
                 vec![]
             }
         }
@@ -109,7 +110,7 @@ impl KbdEventListener for LinuxKeyboardEventListener {
             return;
         }
 
-        eprintln!(
+        log::info!(
             "Linux listener is ready to poll {} device files.",
             files.len()
         );
@@ -125,7 +126,7 @@ impl KbdEventListener for LinuxKeyboardEventListener {
                 nix::poll::PollTimeout::try_from(std::time::Duration::from_millis(100u64))
                     .expect("SAFETY: 100 millis fits in i32"),
             ) {
-                eprintln!("Failed to poll input FDs: {errno}");
+                log::error!("Failed to poll input FDs: {errno}");
             }
 
             // We need to collect to get drop of `pollfds` and make borrow checker happy.
@@ -143,18 +144,18 @@ impl KbdEventListener for LinuxKeyboardEventListener {
                 // example there uses the same approach) so it's safe to iterate together.
                 let events = self.read_events_from_dev(&mut files[idx]);
                 if let Err(err) = self.send_events(&tx, &events) {
-                    eprintln!("Failed to send events via channel: {err}.");
+                    log::error!("Failed to send events via channel: {err}.");
                     break 'listen;
                 }
             }
         }
 
-        eprintln!("Linux listener finished its loop.");
+        log::debug!("Linux listener finished its loop.");
     }
 }
 
 pub fn stop_listening() {
-    eprintln!("Stop listening incoming events.");
+    log::info!("Stop listening incoming events.");
     CONTINUE_LISTEN.store(false, std::sync::atomic::Ordering::SeqCst)
 }
 

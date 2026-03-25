@@ -9,19 +9,20 @@ I know it's not secured, but [who's gonna stop me](https://www.youtube.com/watch
 I know it's overengineering to create "plugin" system for the problem that could be solved using 200loc project. But who cares. Programming is about fun.
 
 ## TODO
-- [ ] Proper logging/stdout/err
 - [ ] Rework kdb_event_listener
 - [ ] Unit tests: https://jorgeortiz.dev/posts/rust_unit_testing_file_reading/
 - [ ] Benchmark two solutions (old and new). Use uinput to emulate input: https://www.kernel.org/doc/html/v4.12/input/uinput.html
 - [ ] Rework README
+- [ ] Rewrite build.rs
+- [ ] Bump version
 
 ## Configuration
+
+For more information about all possible options run: `keyprod --help`.
 
 There are two available plugins at the moment:
 * echo (plugins/echo.rs): prints keypress events to a destination (by default `stdout`).
 * history (plugins/history.rs): saves the number of keypresses made in each day to the db. Only the **total number** of keystrokes for each day is stored, there is no separate number for each key.
-
-For more information about possible options run: `keyprod --help`.
 
 Examples:
 ```sh
@@ -33,6 +34,19 @@ keyprod --plugin history
 
 # Combination of previous two commands with redefined path for the db.
 keyprod --plugin echo stderr --plugin history --db-path="./history.db"
+```
+
+Log level can be configured using `RUST_LOG` environment variable. Default: info.
+
+```sh
+# Only error logs are printed.
+RUST_LOG=error keyprod --plugin echo
+
+# Logs with debug verbosity and higher are printed.
+RUST_LOG=debug keyprod --plugin echo
+
+# Disable logging.
+RUST_LOG=off keyprod --plugin echo
 ```
 
 # Design

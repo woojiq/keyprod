@@ -1,7 +1,7 @@
 use anyhow::{Context, anyhow};
 use keyprod::{
-    kbd_event_listener::spawn_kbd_event_listener_thread, plugins::spawn_plugins_runtime_thread,
-    publisher::spawn_publisher_thread,
+    args::print_help, kbd_event_listener::spawn_kbd_event_listener_thread,
+    plugins::spawn_plugins_runtime_thread, publisher::spawn_publisher_thread,
 };
 
 extern "C" fn signal_handler(_: libc::c_int) {
@@ -13,7 +13,17 @@ fn get_signal_handler() -> libc::sighandler_t {
 }
 
 fn main() -> anyhow::Result<()> {
-    let args = keyprod::args::Args::parse()?;
+    let args = match keyprod::args::Args::parse() {
+        Ok(res) => res,
+        Err(err) => {
+            eprintln!("Error while parsing cli arguments: {err}\n");
+            print_help();
+
+            std::process::exit(64);
+        }
+    };
+
+    setup_logger();
 
     unsafe {
         libc::signal(libc::SIGINT, get_signal_handler());
@@ -51,4 +61,8 @@ fn main() -> anyhow::Result<()> {
         .map_err(|err| anyhow!("Error joining thread (Plugins) {err:?}"))?;
 
     Ok(())
+}
+
+fn setup_logger() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 }
