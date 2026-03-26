@@ -6,6 +6,7 @@ const PLUGIN_NAME: &str = "History";
 
 pub struct PluginHistory<T: CurrentLocalTime> {
     unsaved_events: u64,
+    dump_interval: Option<std::time::Duration>,
 
     stats_db: KeycodeStatisticsSql,
     time: T,
@@ -26,14 +27,20 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 #[derive(Clone)]
 pub struct PluginHistoryConfig {
     db_path: std::path::PathBuf,
+    dump_interval: u64,
 }
 
 pub struct PluginHistoryFactory;
 
 impl<T: CurrentLocalTime> PluginHistory<T> {
-    fn new(stats_db: KeycodeStatisticsSql, time: T) -> Self {
+    fn new(
+        stats_db: KeycodeStatisticsSql,
+        dump_interval: Option<std::time::Duration>,
+        time: T,
+    ) -> Self {
         Self {
             unsaved_events: 0,
+            dump_interval,
             stats_db,
             time,
         }
@@ -42,7 +49,13 @@ impl<T: CurrentLocalTime> PluginHistory<T> {
     pub fn init(value: PluginHistoryConfig, time: T) -> Result<Self> {
         let sql = KeycodeStatisticsSql::new(&value.db_path)?;
 
-        Ok(Self::new(sql, time))
+        let interval = if value.dump_interval == 0 {
+            None
+        } else {
+            Some(std::time::Duration::from_secs(value.dump_interval))
+        };
+
+        Ok(Self::new(sql, interval, time))
     }
 
     fn save_keypress_in_cache(&mut self, event: crate::kbd_event::KbdEvent) {
@@ -77,7 +90,7 @@ impl<T: CurrentLocalTime> Plugin for PluginHistory<T> {
     }
 
     async fn run(&mut self, mut rx: tokio::sync::mpsc::Receiver<crate::Event>) {
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+        let mut interval = self.dump_interval.map(tokio::time::interval);
 
         loop {
             tokio::select! {
@@ -87,16 +100,25 @@ impl<T: CurrentLocalTime> Plugin for PluginHistory<T> {
                     };
 
                     match event {
-                        crate::Event::KeyEvent(kbd_ev) => self.save_keypress_in_cache(kbd_ev),
-                        crate::Event::PluginStop => if let Err(err) = self.sync_db_with_cache() {
-                            log::error!("Failed to write cached events to the db: {err}");
-                        }
+                        crate::Event::KeyEvent(kbd_ev) => {
+                            self.save_keypress_in_cache(kbd_ev);
+                            if interval.is_none() {
+                                let _ = self.sync_db_with_cache();
+                            }
+                        },
+                        crate::Event::PluginStop => {
+                            let _ = self.sync_db_with_cache();
+                        },
                     }
                 },
-                _ = interval.tick() => {
-                    if let Err(err) = self.sync_db_with_cache() {
-                        log::error!("Failed to write cached events to the db: {err}");
+                _ = async {
+                    if let Some(interval) = interval.as_mut() {
+                        interval.tick().await
+                    } else {
+                        std::future::pending().await
                     }
+                } => {
+                    let _ = self.sync_db_with_cache();
                 }
             };
         }
@@ -171,6 +193,7 @@ impl Default for PluginHistoryConfig {
     fn default() -> Self {
         Self {
             db_path: std::path::PathBuf::from(crate::STATE_DIR).join("history.db"),
+            dump_interval: 5,
         }
     }
 }
@@ -205,6 +228,14 @@ Options:
         Absolute path to the db where to store the number of daily keyboard presses.
 
         [default: /var/lib/keyprod/history.db]
+
+    --interval <sec>
+        Interval between saving events to the database. Increasing the value can reduce the load
+        on the system, as keyboard events will be summed up locally for longer and synced with the
+        database less often. If the value is 0, changes to the database will be saved with each
+        keystroke.
+
+        [default: 5]
 "
         .to_string()
     }
@@ -220,6 +251,7 @@ Options:
         while let Some(arg) = parser.next()? {
             match arg {
                 Long("db-path") => config.db_path = parser.value()?.into(),
+                Long("interval") => config.dump_interval = parser.value()?.parse()?,
                 _ => return Err(arg.unexpected()),
             }
         }

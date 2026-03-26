@@ -121,12 +121,14 @@ pub fn spawn_plugins_runtime_thread(
             let mut handles = Vec::with_capacity(plugins.len());
 
             for (mut plugin, rx) in plugins.into_iter().zip(plugin_rxs) {
-                handles.push(tokio::spawn(async move { plugin.run(rx).await }));
+                let name = plugin.name();
+                handles.push((name, tokio::spawn(async move { plugin.run(rx).await })));
             }
 
-            for handle in handles {
-                // TODO: graceful shutdown for other plugins then.
-                handle.await.expect("Failed to finish plugin.");
+            for (name, handle) in handles {
+                if let Err(err) = handle.await {
+                    log::error!("The plugin \"{name}\" failed to gracefully finish: {err}");
+                }
             }
         });
     });

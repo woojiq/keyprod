@@ -12,7 +12,6 @@ I know it's overengineering to create "plugin" system for the problem that could
 - [ ] Rework kdb_event_listener
 - [ ] Unit tests: https://jorgeortiz.dev/posts/rust_unit_testing_file_reading/
 - [ ] Benchmark two solutions (old and new). Use uinput to emulate input: https://www.kernel.org/doc/html/v4.12/input/uinput.html
-- [ ] Rework README
 - [ ] Rewrite build.rs
 - [ ] Bump version
 
@@ -49,7 +48,7 @@ RUST_LOG=debug keyprod --plugin echo
 RUST_LOG=off keyprod --plugin echo
 ```
 
-# Design
+# Application Design
 
 ## Architecture
 
