@@ -9,6 +9,7 @@ I know it's not secured, but [who's gonna stop me](https://www.youtube.com/watch
 I know it's overengineering to create "plugin" system for the problem that could be solved using 200loc project. But who cares. Programming is about fun.
 
 ## TODO
+- [ ] Shutdown without additional keypress
 - [ ] Rework kdb_event_listener
 - [ ] Unit tests: https://jorgeortiz.dev/posts/rust_unit_testing_file_reading/
 - [ ] Benchmark two solutions (old and new). Use uinput to emulate input: https://www.kernel.org/doc/html/v4.12/input/uinput.html
@@ -33,6 +34,9 @@ keyprod --plugin history
 
 # Combination of previous two commands with redefined path for the db.
 keyprod --plugin echo stderr --plugin history --db-path="./history.db"
+
+# Print all history statistics.
+keyprod --plugin stat --csv
 ```
 
 Log level can be configured using `RUST_LOG` environment variable. Default: info.

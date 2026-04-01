@@ -21,10 +21,12 @@ impl DefaultKeyboardEventPublisher {
     }
 
     fn send_to_all(&mut self, event: crate::Event) {
-        for tx in &mut self.plugin_event_txs {
-            // TODO: error handling
-            let _ = tx.blocking_send(event);
-        }
+        self.plugin_event_txs.retain_mut(|tx| {
+            !matches!(
+                tx.try_send(event),
+                Err(tokio::sync::mpsc::error::TrySendError::Closed(_))
+            )
+        });
     }
 }
 
@@ -32,6 +34,9 @@ impl KeyboardEventPublisher for DefaultKeyboardEventPublisher {
     fn run(&mut self) {
         while let Ok(kbd_event) = self.kbd_event_rcv.recv() {
             self.send_to_all(kbd_event.into());
+            if self.plugin_event_txs.is_empty() {
+                break;
+            }
         }
 
         log::info!("Stopping all plugins.");

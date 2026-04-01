@@ -26,6 +26,7 @@
             buildInputs = with pkgs; [
               systemd
               clang
+              fontconfig
             ];
 
             LD_LIBRARY_PATH = libPath;

@@ -1,13 +1,20 @@
 pub mod echo;
 pub mod history;
+pub mod stat;
 
 use anyhow::Context;
-pub use echo::EventEcho;
+pub use echo::PluginEcho;
 pub use history::PluginHistory;
 
-use crate::plugins::{echo::EventEchoFactory, history::PluginHistoryFactory};
+use crate::plugins::{
+    echo::PluginEchoFactory, history::PluginHistoryFactory, stat::PluginStatFactory,
+};
 
-pub static PLUGINS: [&dyn PluginFactory; 2] = [&EventEchoFactory, &PluginHistoryFactory];
+pub static PLUGINS: [&dyn PluginFactory; 3] = [
+    &PluginEchoFactory,
+    &PluginHistoryFactory,
+    &PluginStatFactory,
+];
 
 #[derive(Debug, thiserror::Error)]
 #[error("{plugin_name}: {err}")]
@@ -111,6 +118,7 @@ pub fn spawn_plugins_runtime_thread(
         plugin_rxs.push(rx);
     }
 
+    // TODO: somehow detect when there are no plugins or all plugins have already completed. To avoid hanging.
     let plugins_runtime = std::thread::spawn(move || {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()

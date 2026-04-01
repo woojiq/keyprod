@@ -143,8 +143,8 @@ impl KbdEventListener for LinuxKeyboardEventListener {
                 // Looks like `nix::poll::poll` doesn't modify order of elements (the
                 // example there uses the same approach) so it's safe to iterate together.
                 let events = self.read_events_from_dev(&mut files[idx]);
-                if let Err(err) = self.send_events(&tx, &events) {
-                    log::error!("Failed to send events via channel: {err}.");
+                if let Err(_err) = self.send_events(&tx, &events) {
+                    // log::error!("Failed to send events via channel: {err}.");
                     break 'listen;
                 }
             }

@@ -1,7 +1,5 @@
 use crate::time::CurrentLocalTime;
 
-use super::Plugin;
-
 const PLUGIN_NAME: &str = "History";
 
 pub struct PluginHistory<T: CurrentLocalTime> {
@@ -83,7 +81,7 @@ impl<T: CurrentLocalTime> PluginHistory<T> {
 }
 
 #[async_trait::async_trait]
-impl<T: CurrentLocalTime> Plugin for PluginHistory<T> {
+impl<T: CurrentLocalTime> super::Plugin for PluginHistory<T> {
     // TODO: think whether we need `name` function in each trait.
     fn name(&self) -> &'static str {
         PLUGIN_NAME
@@ -189,10 +187,16 @@ impl KeycodeStatisticsSql {
     }
 }
 
+impl PluginHistoryConfig {
+    pub fn get_default_db_path() -> std::path::PathBuf {
+        std::path::PathBuf::from(crate::STATE_DIR).join("history.db")
+    }
+}
+
 impl Default for PluginHistoryConfig {
     fn default() -> Self {
         Self {
-            db_path: std::path::PathBuf::from(crate::STATE_DIR).join("history.db"),
+            db_path: Self::get_default_db_path(),
             dump_interval: 5,
         }
     }
@@ -205,7 +209,7 @@ impl super::PluginConfig for PluginHistoryConfig {
 
     fn try_init_plugin(
         self: Box<Self>,
-    ) -> Result<Box<dyn Plugin>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Box<dyn super::Plugin>, Box<dyn std::error::Error + Send + Sync>> {
         match PluginHistory::init(*self, chrono::Local {}) {
             Ok(pl) => Ok(Box::new(pl)),
             Err(err) => Err(Box::new(err)),
@@ -226,7 +230,6 @@ Useful to monitor your performance on the computer (if you run this program as a
 Options:
     --db-path <path>
         Absolute path to the db where to store the number of daily keyboard presses.
-
         [default: /var/lib/keyprod/history.db]
 
     --interval <sec>
@@ -234,7 +237,6 @@ Options:
         on the system, as keyboard events will be summed up locally for longer and synced with the
         database less often. If the value is 0, changes to the database will be saved with each
         keystroke.
-
         [default: 5]
 "
         .to_string()

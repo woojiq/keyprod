@@ -1,8 +1,6 @@
-use super::Plugin;
-
 const PLUGIN_NAME: &str = "Echo";
 
-pub struct EventEcho {
+pub struct PluginEcho {
     writer: Box<dyn std::io::Write + Send>,
 }
 
@@ -15,36 +13,36 @@ pub enum Error {
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[derive(Default, Clone)]
-pub struct EventEchoConfig {
-    writer: EventEchoWriter,
+pub struct PluginEchoConfig {
+    writer: PluginEchoWriter,
 }
 
 #[derive(Default, Clone)]
-pub enum EventEchoWriter {
+pub enum PluginEchoWriter {
     #[default]
     Stdout,
     Stderr,
     File(std::path::PathBuf),
 }
 
-pub struct EventEchoFactory;
+pub struct PluginEchoFactory;
 
-impl EventEcho {
+impl PluginEcho {
     fn new(writer: Box<dyn std::io::Write + Send>) -> Self {
         Self { writer }
     }
 
-    pub fn init(value: EventEchoConfig) -> Result<Self> {
+    pub fn init(value: PluginEchoConfig) -> Result<Self> {
         match value.writer {
-            EventEchoWriter::Stdout => {
+            PluginEchoWriter::Stdout => {
                 let stdout = std::io::stdout();
                 Ok(Self::new(Box::new(stdout)))
             }
-            EventEchoWriter::Stderr => {
+            PluginEchoWriter::Stderr => {
                 let stderr = Box::new(std::io::stderr());
                 Ok(Self::new(Box::new(stderr)))
             }
-            EventEchoWriter::File(path_buf) => {
+            PluginEchoWriter::File(path_buf) => {
                 let file = std::fs::File::options()
                     .create(true)
                     .append(true)
@@ -74,7 +72,7 @@ impl EventEcho {
 }
 
 #[async_trait::async_trait]
-impl Plugin for EventEcho {
+impl super::Plugin for PluginEcho {
     fn name(&self) -> &'static str {
         PLUGIN_NAME
     }
@@ -89,22 +87,22 @@ impl Plugin for EventEcho {
     }
 }
 
-impl super::PluginConfig for EventEchoConfig {
+impl super::PluginConfig for PluginEchoConfig {
     fn name(&self) -> &'static str {
         PLUGIN_NAME
     }
 
     fn try_init_plugin(
         self: Box<Self>,
-    ) -> Result<Box<dyn Plugin>, Box<dyn std::error::Error + Send + Sync>> {
-        match EventEcho::init(*self) {
+    ) -> Result<Box<dyn super::Plugin>, Box<dyn std::error::Error + Send + Sync>> {
+        match PluginEcho::init(*self) {
             Ok(pl) => Ok(Box::new(pl)),
             Err(err) => Err(Box::new(err)),
         }
     }
 }
 
-impl super::PluginFactory for EventEchoFactory {
+impl super::PluginFactory for PluginEchoFactory {
     fn cli_name(&self) -> &'static str {
         "echo"
     }
@@ -128,13 +126,13 @@ Options:
     ) -> Result<Box<dyn super::PluginConfig>, lexopt::Error> {
         use lexopt::prelude::*;
 
-        let mut config = EventEchoConfig::default();
+        let mut config = PluginEchoConfig::default();
 
         while let Some(arg) = parser.next()? {
             match arg {
-                Long("stdout") => config.writer = EventEchoWriter::Stdout,
-                Long("stderr") => config.writer = EventEchoWriter::Stderr,
-                Long("file") => config.writer = EventEchoWriter::File(parser.value()?.into()),
+                Long("stdout") => config.writer = PluginEchoWriter::Stdout,
+                Long("stderr") => config.writer = PluginEchoWriter::Stderr,
+                Long("file") => config.writer = PluginEchoWriter::File(parser.value()?.into()),
                 _ => return Err(arg.unexpected()),
             }
         }
